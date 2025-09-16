@@ -1,0 +1,63 @@
+# S.A.M.I. Voice Service Dockerfile
+FROM python:3.11-slim
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies for audio processing
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    portaudio19-dev \
+    python3-pyaudio \
+    alsa-utils \
+    alsa-tools \
+    pulseaudio \
+    espeak \
+    espeak-data \
+    libespeak1 \
+    libespeak-dev \
+    festival \
+    festvox-kallpc16k \
+    wget \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set work directory
+WORKDIR /app
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install additional voice dependencies
+RUN pip install --no-cache-dir \
+    pyttsx3 \
+    pyaudio \
+    sounddevice \
+    librosa \
+    speechrecognition \
+    pydub
+
+# Copy project
+COPY . .
+
+# Create necessary directories
+RUN mkdir -p /app/data/audio /app/logs
+
+# Create non-root user
+RUN useradd --create-home --shell /bin/bash sami
+RUN chown -R sami:sami /app
+USER sami
+
+# Expose port
+EXPOSE 8002
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8002/health || exit 1
+
+# Run the voice service
+CMD ["python", "-m", "app.services.voice_service"]
